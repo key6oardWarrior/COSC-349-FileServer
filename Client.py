@@ -1,5 +1,5 @@
 from socket import socket, AF_INET, SOCK_STREAM
-from os.path import exists
+from Options import Options
 
 class RequestRequired(Exception):
 	pass
@@ -8,7 +8,6 @@ class Client:
 	__socket: socket
 	__port = 2526
 	__is_connected = False
-	__is_requested = False
 
 	def __init__(self, IP_ADDR: str, PORT: int=None) -> None:
 		'''
@@ -26,17 +25,25 @@ class Client:
 		else:
 			raise ConnectionError("Connection Failed")
 
+	def send(self, option: Options) -> None:
+		'''
+		Send a message to the server
+
+		# Params:
+		option - What should the server do
+		'''
+		msg = "--FILES--" if option == Options.Files else "--CLOSE--"
+		self.__socket.send(msg.encode())
+
 	def send_file(self, file_path: str) -> None:
 		'''
-		Send a file from client machine to server
+		Send a file from client machine to server.  Won't check if file exists
 
 		# Params:
 		file_path - The file path on the client to send to the server
 		'''
-		if exists(file_path):
-			self.__socket.sendfile(file_path)
-		else:
-			FileNotFoundError("File not found")
+		self.__socket.send((file_path[file_path.rfind("/")+1:] + "FileName").encode())
+		self.__socket.send((open(file_path, "r").read() + "\n--END--").encode())
 
 	def requestFile(self, name_of_file: str) -> None:
 		'''
@@ -46,7 +53,6 @@ class Client:
 		name_of_file - The path on the server to get a file
 		'''
 		self.__socket.send(name_of_file.encode())
-		self.__is_requested = True
 
 	def responce(self) -> str:
 		'''
@@ -56,11 +62,7 @@ class Client:
 		A str that contains the content of the file. If the file does not
 		exists then the string will be empty
 		'''
-		if self.__is_requested == True:
-			self.__is_requested = False
-			return self.__socket.recv(1024).decode()
-
-		raise RequestRequired("A file request is required before ")
+		return self.__socket.recv(1024).decode()
 
 	def close(self) -> None:
 		'''
@@ -78,12 +80,3 @@ class Client:
 		A bool that if True means that the client is connected to the server
 		'''
 		return self.__is_connected
-
-	@property
-	def is_requested(self) -> bool:
-		'''
-		# Returns:
-		A bool that determins if a request for file has been sent to the
-		server. This will be reset to false once responce has been called
-		'''
-		return self.__is_requested
